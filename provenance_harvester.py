@@ -1470,8 +1470,10 @@ if __name__ == "__main__":
                     cc = search_cell_column_byname(columns,x)
                     set_idx.append(cc[1]["cellIndex"])
                 
-                #for x in set_idx:
-                #    cursor.execute("INSERT INTO col_dependency VALUES (?,?,?)",(state_id,x,x))
+                #print(state_id,set_idx)
+                #exit()
+                for x in set_idx:
+                    cursor.execute("INSERT INTO col_dependency VALUES (?,?,?)",(state_id,x,x))
 
                 #print(set_idx)
                 #print(all_col)
@@ -1614,8 +1616,8 @@ if __name__ == "__main__":
                         cursor.execute("INSERT INTO cell VALUES (?,?,?)",(cell_id,v,row_id))
 
                         # add to col dependency only for the first time
-                        if i == 0:
-                            cursor.execute("INSERT INTO col_dependency VALUES (?,?,?)",(state_id,int(v),int(v)))
+                        #if i == 0:
+                        #    cursor.execute("INSERT INTO col_dependency VALUES (?,?,?)",(state_id,int(v),int(v)))
 
                         try:
                             val = vv["v"]
