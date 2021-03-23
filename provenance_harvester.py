@@ -716,9 +716,19 @@ if __name__ == "__main__":
     rcexs = list(cursor.execute("SELECT row_id,row_pos_id from row_position  where state_id=? order by row_pos_id asc",(str(cc_ids),)))
     rcexs = [(x[0],x[1]) for x in rcexs]
 
+    print([(x["id"],str(x["id"])+".change.zip") for x in dataset[1]["hists"][::-1]])
+    """
     for order,(change_id, change) in enumerate([(x["id"],str(x["id"])+".change.zip") for x in dataset[1]["hists"][::-1]]):
         #print(change)
         if change.endswith(".zip"):
+            print(change)
+            locexzip,_ = open_change(hist_dir,change,target_folder=hist_dir)
+    """
+    #exit()
+    for order,(change_id, change) in enumerate([(x["id"],str(x["id"])+".change.zip") for x in dataset[1]["hists"][::-1]]):
+        print(change)
+        if change.endswith(".zip"):
+            print(change)
 
             locexzip,_ = open_change(hist_dir,change,target_folder=hist_dir)
             # read change
@@ -1739,7 +1749,7 @@ if __name__ == "__main__":
                 #break
             else:
                 print(changes[2])
-                break            
+                #continue            
             
             prev_state_id=state_id
             #if state_id==32:
