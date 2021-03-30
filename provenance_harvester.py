@@ -517,6 +517,7 @@ if __name__ == "__main__":
                 (row_id integer, array_id integer)''')
     cursor.execute('''CREATE UNIQUE INDEX row_id
     ON row(row_id)''')
+
     row_id = 0
 
     # cell
@@ -526,6 +527,7 @@ if __name__ == "__main__":
     ON cell(cell_id)''')            
     cursor.execute('''CREATE UNIQUE INDEX cell_col_row
     ON cell(col_id,row_id)''')         
+
 
     cell_id = 0
 
@@ -578,7 +580,122 @@ if __name__ == "__main__":
     # row_position
     cursor.execute('''CREATE TABLE IF NOT EXISTS row_position
                 (row_pos_id integer, row_id integer, state_id integer, prev_row_id integer, prev_row_pos_id integer)''')
+
+    cursor.execute('''CREATE INDEX row_pos_id_row_pos
+    ON row_position(row_pos_id)''')
+
+    cursor.execute('''CREATE INDEX row_id_row_pos_idx
+    ON row_position(row_id)''')
+
+    cursor.execute('''CREATE INDEX state_id_row_pos_idx
+    ON row_position(state_id)''')
+
+
+    cursor.execute('''CREATE INDEX prev_row_id_row_pos_idx
+    ON row_position(prev_row_id)''')
+
+    cursor.execute('''CREATE INDEX prev_row_posexit_id_row_pos_idx
+    ON row_position(prev_row_pos_id)''')
+
+
+
     row_pos_id = 0
+
+
+   # create additional index
+
+    # create content and state relation
+    cursor.execute('''CREATE INDEX content_state_id_idx
+    ON content(state_id)''')
+
+    # create content and prev_content_id relation
+    cursor.execute('''CREATE INDEX content_prev_content_id_idx
+    ON content(prev_content_id)''');
+
+
+
+    # create view
+
+    # column schema and position at each state
+    cursor.execute('''
+    create  view col_each_state as
+    select (b.state_id-(select max(state_id) from state s))*-1 as state
+    ,b.state_id,a.col_schema_id,a.col_id,a.col_name,a.prev_col_id,a.prev_col_schema_id 
+    from column_schema a, (
+    WITH RECURSIVE
+    state_cnt(state_id) AS ( 
+    SELECT -1 UNION ALL 
+    SELECT state_id+1 FROM state_cnt
+    LIMIT (select max(state_id)+2 from state)
+    )
+    SELECT state_id FROM state_cnt
+    ) b
+    where a.state_id<=b.state_id 
+    and a.col_schema_id not in
+    (
+    select a.prev_col_schema_id from column_schema a
+    where a.state_id<=b.state_id
+    )
+    and prev_col_id>=-1    
+    ''');
+
+    # row position
+    cursor.execute(
+    '''create  view row_at_state as
+    select (b.state_id-(select max(state_id) from state s))*-1 as state
+    ,b.state_id,a.row_pos_id,a.row_id,a.prev_row_id,a.prev_row_pos_id 
+    from row_position a, (
+    WITH RECURSIVE
+    state_cnt(state_id) AS ( 
+    SELECT -1 UNION ALL 
+    SELECT state_id+1 FROM state_cnt
+    LIMIT (select max(state_id)+2 from state)
+    ) SELECT state_id FROM state_cnt
+    ) b
+    where a.state_id<=b.state_id 
+    and a.row_pos_id not in
+    (
+    select a.prev_row_pos_id from row_position a
+    where a.state_id<=b.state_id
+    )
+    ''')
+
+    # column dependency at state
+    cursor.execute('''create view col_dep_state as
+    WITH RECURSIVE
+    col_dep_order(state_id,prev_state_id,prev_input_column,input_column,output_column,level) AS (
+    select state_id,state_id,input_column,input_column,output_column,0 from col_dependency cd 
+    UNION ALL
+    SELECT a.state_id,b.state_id,b.prev_input_column,a.input_column,b.input_column,b.level+1
+    FROM col_dependency a, col_dep_order b
+    WHERE a.output_column=b.input_column 
+    and a.state_id>b.state_id)
+    SELECT distinct * from col_dep_order
+    ''')
+    
+    # value at state
+    cursor.execute('''
+    create  view value_at_state as
+    select (b.state_id-(select max(state_id) from state s))*-1 as state
+    ,b.state_id,a.content_id,a.prev_content_id,c.value_text,d.row_id,d.col_id 
+    from content a, (
+    WITH RECURSIVE
+    state_cnt(state_id) AS ( 
+    SELECT -1 UNION ALL 
+    SELECT state_id+1 FROM state_cnt
+    LIMIT (select max(state_id)+2 from state)
+    ) SELECT state_id FROM state_cnt
+    ) b
+    NATURAL JOIN value c
+    NATURAL JOIN cell d
+    where a.state_id<=b.state_id 
+    and a.content_id not in
+    (
+    select a.prev_content_id from content a
+    where a.state_id<=b.state_id
+    )
+    ''')
+
 
     cursor.execute("INSERT INTO source VALUES (?,?,?)",(source_id,file_name,"OpenRefine Project File"))
 
@@ -705,6 +822,8 @@ if __name__ == "__main__":
         row_id+=1
         row_pos_id+=1        
             
+    #print(row_pos_id)
+    #exit()
     #print(temp_row_id,temp_col_id,dataset[0],dataset[1])
     conn.commit()
     #exit()
@@ -717,14 +836,19 @@ if __name__ == "__main__":
     rcexs = [(x[0],x[1]) for x in rcexs]
 
     print([(x["id"],str(x["id"])+".change.zip") for x in dataset[1]["hists"][::-1]])
+    
     """
     for order,(change_id, change) in enumerate([(x["id"],str(x["id"])+".change.zip") for x in dataset[1]["hists"][::-1]]):
         #print(change)
         if change.endswith(".zip"):
             print(change)
             locexzip,_ = open_change(hist_dir,change,target_folder=hist_dir)
+            changes = read_change(locexzip+"/change.txt")
+            print(changes[1])
     """
+    
     #exit()
+
     for order,(change_id, change) in enumerate([(x["id"],str(x["id"])+".change.zip") for x in dataset[1]["hists"][::-1]]):
         print(change)
         if change.endswith(".zip"):
@@ -986,8 +1110,18 @@ if __name__ == "__main__":
                     new_next = (col_schema_id,next_sch[1],state_id,next_sch[3],next_sch[4],prev_sch_idx,next_sch[0])
                     cursor.execute('''INSERT INTO column_schema VALUES
                     (?,?,?,?,?,?,?)''',new_next)
+                    
                     col_schema_id+=1
                     ccexs_all[pop_index+1] = new_next
+
+                    #removed column
+                    #old_index
+                    old_column = ccexs_all[[x[1] for x in ccexs_all].index(new_cell_index)]
+                    new_next = (col_schema_id,old_column[1],state_id,old_column[3],old_column[4],-2,old_column[0])
+                    cursor.execute('''INSERT INTO column_schema VALUES
+                    (?,?,?,?,?,?,?)''',new_next)
+                    
+                    col_schema_id+=1
                 
                 ccexs_all.pop([x[1] for x in ccexs_all].index(new_cell_index))
                 conn.commit()
@@ -1025,7 +1159,7 @@ if __name__ == "__main__":
                 for c_key,c_val in changes[2]["val"].items():
                     #print(dataset[2]["rows"][c_key]["cells"][new_cell_index])
                     if dataset[2]["rows"][c_key]["cells"][new_cell_index] == c_val:
-                        print(c_key,c_val)
+                        #print(c_key,c_val)
                         dataset[2]["rows"][c_key]["cells"].pop(new_cell_index)
                         ##cell_changes.write("{},{},{},{},{},{},{},{},{}\n".format(order,change_id,changes[1],c_key,new_cell_index,None,c_val,c_key,None))
                         #cell_writer.writerow([order,change_id,changes[1],c_key,new_cell_index,None,c_val,c_key,None])
@@ -1144,7 +1278,7 @@ if __name__ == "__main__":
             # op-4
             elif changes[1] == "com.google.refine.model.changes.ColumnSplitChange" :
                 #print(changes[2])
-                print(dataset[2]["rows"][0]["cells"])
+                #print(dataset[2]["rows"][0]["cells"])
                 # get the cell index
                 index_col = []
                 for col_name in changes[2]["new_columns"]:
@@ -1160,7 +1294,7 @@ if __name__ == "__main__":
                 for ind in sorted(index_col)[::-1]:
                     icol, col = search_cell_column(dataset[0]["cols"],ind)
                     dataset[0]["cols"].pop(icol)
-                    print(icol,ori_column)
+                    #print(icol,ori_column)
                     cursor.execute("INSERT INTO col_dependency VALUES (?,?,?)",(state_id,col["cellIndex"],ori_column[1]["cellIndex"]))
                     col_dependency_graph.add_edge(ori_column[1]["cellIndex"],col["cellIndex"])
 
@@ -1199,7 +1333,7 @@ if __name__ == "__main__":
                 """
 
                 for ind in sorted(index_col)[::-1]:
-                    print(ccexs_all)
+                    #print(ccexs_all)
                     pop_index = [x[1] for x in ccexs_all].index(ind)
                     try:
                         next_sch = ccexs_all[pop_index+1]                         
@@ -1230,7 +1364,7 @@ if __name__ == "__main__":
 
                     ccexs_all.pop([x[1] for x in ccexs_all].index(ind))      
 
-                    print(ccexs_all)        
+                    #print(ccexs_all)        
 
                 #print(ccexs_all)
                 conn.commit()
@@ -1242,9 +1376,9 @@ if __name__ == "__main__":
             elif changes[1] == "com.google.refine.model.changes.ColumnRenameChange":
                 #print(changes[2])
                 index_col = search_cell_column_byname(dataset[0]["cols"],changes[2]["oldColumnName"])[1]
-                print(index_col)
+                #print(index_col)
                 index_col["name"] = changes[2]["oldColumnName"]
-                print(changes[2])
+                #print(changes[2])
                 #exit()
                             
                 cursor.execute("INSERT INTO col_dependency VALUES (?,?,?)",(state_id,index_col["cellIndex"],index_col["cellIndex"]))
@@ -1512,6 +1646,8 @@ if __name__ == "__main__":
                     row_pos_id+=1
                 """
 
+                #print(row_pos_id)
+
                 rcexs_cp = rcexs.copy()
                 for i,li in enumerate(changes[2]["row_order"]):
                     old_rows[li] = new_rows[i]
@@ -1529,16 +1665,29 @@ if __name__ == "__main__":
                         #rcexs[i] = temp_rid
                         row_pos_id+=1
                     prev_vv = temp_rid[0]
+                #print(row_pos_id)
+                #exit()
+                row_dict_id = {x[0]:x[1] for x in rcexs}
+                #print(max([x[1] for x in rcexs]))
+                #print(row_dict_id[3])
+
+                #exit()
                 
                 for i,li in enumerate(changes[2]["row_order"]):
                     if i == 0:
                         prev_vv = -1
                     temp_rid = rcexs_cp[i]
                     if rcexs_cp[i] != rcexs[i]:
-                        cursor.execute("INSERT INTO row_position VALUES (?,?,?,?,?)",(temp_rid[1],temp_rid[0],state_id,int(prev_vv),rcexs[i][1]))
+                        #cursor.execute("INSERT INTO row_position VALUES (?,?,?,?,?)",(temp_rid[1],temp_rid[0],state_id,int(prev_vv),rcexs[i][1]))
+                        cursor.execute("INSERT INTO row_position VALUES (?,?,?,?,?)",(temp_rid[1],temp_rid[0],state_id,int(prev_vv),row_dict_id[temp_rid[0]]))
                     prev_vv = temp_rid[0]
 
+                #print(rcexs[:100])
+
                 rcexs = rcexs_cp
+
+                #print(rcexs[:100])
+                #exit()
 
                 #print(rcexs_cp)
                 #exit()
@@ -1650,6 +1799,7 @@ if __name__ == "__main__":
                 rcexs_cp = rcexs.copy()
                 #print(temp_rows)
                 #print(rcexs)
+                #print(row_pos_id)
                 for v,vv in enumerate(temp_rows):
                     if v==0:
                         prev_vv = -1
@@ -1659,11 +1809,17 @@ if __name__ == "__main__":
                     #patch
                     try:
                         if rcexs_cp[v] != rcexs[vv]:
-                            rcexs.insert(v,(vv,row_pos_id))
-                            row_pos_id+=1
+                            pass
+                            #rcexs.insert(v,(vv,row_pos_id))
+                            #row_pos_id+=1
+                            #print("executed1")
                     except:
                         rcexs.insert(v,(vv,row_pos_id))
                         row_pos_id+=1
+                        #print("executed2")
+
+                #print(row_pos_id)
+                #exit()
 
                 rcexs = rcexs[:len(temp_rows)]
                 #print(rcexs)
@@ -1687,15 +1843,30 @@ if __name__ == "__main__":
                         prev = rcexs[i-1][0]
                     new_row_dict[x[0]] = prev                    
                 
-                print(old_row_dict,new_row_dict)
+                #print(old_row_dict,new_row_dict)
+                #exit()
+
+                #row_dict_id = {x[0]:x[1] for x in rcexs}
+                #print(row_dict_id[3])
+                row_dict_id = {x[0]:x[1] for x in rcexs_cp}
+                #print(row_dict_id[3])
                 #exit()
 
                 for key,val in new_row_dict.items():
                     if key not in old_row_dict.keys():
+                        print(key,val)
+                        #cursor.execute("INSERT INTO row_position VALUES (?,?,?,?,?)",(rcexs[key][1],rcexs[key][0],state_id,val,-1))
                         cursor.execute("INSERT INTO row_position VALUES (?,?,?,?,?)",(rcexs[key][1],key,state_id,val,-1))
                     elif val!=old_row_dict[key]:
-                        cursor.execute("INSERT INTO row_position VALUES (?,?,?,?,?)",(rcexs[key][1],key,state_id,val,rcexs_cp[key][1]))
+                        #print(rcexs[key][0])
+                        print(key,val)
+                        print((rcexs[key][1],key,state_id,val,row_dict_id[key]))
+                        #cursor.execute("INSERT INTO row_position VALUES (?,?,?,?,?)",(rcexs[key][1],rcexs[key][0],state_id,val,row_dict_id[key]))
+                        cursor.execute("INSERT INTO row_position VALUES (?,?,?,?,?)",(rcexs[key][1],key,state_id,val,row_dict_id[key]))
                 
+                #print(new_row_dict[2],old_row_dict[2])
+                #print(rcexs_cp[:20])
+                #print(rcexs[:20])
                 #exit()
 
                 #{[for i,x in enumerate(rcexs_cp)]}
@@ -1760,8 +1931,8 @@ if __name__ == "__main__":
         #print(dataset[2]["rows"][0]["cells"])
 
     #pass
-    print(dataset[0])
-    print(dataset[2]["rows"][0]["cells"])
+    #print(dataset[0])
+    #print(dataset[2]["rows"][0]["cells"])
     
     prev_source_id = source_id
     source_id+=1
