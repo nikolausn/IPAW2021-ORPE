@@ -19,4 +19,4 @@ for example
 ```
 ./report_query.sh  ipaw_2021_demo.db
 ```
-This will produce queries result fromt the DCM
+This will produce queries result from the DCM
