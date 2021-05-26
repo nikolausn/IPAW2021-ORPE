@@ -20,3 +20,6 @@ for example
 ./report_query.sh  ipaw_2021_demo.db
 ```
 This will produce queries result from the DCM
+
+
+More data cleaning use case for practice on NYPL Menu dataset is available in the examples folder.
