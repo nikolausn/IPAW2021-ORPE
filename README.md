@@ -1,4 +1,4 @@
-# IPAW2021-ORPE for Data Cleaning (Provenance) Model - DCM
+# IPAW2021 - Data Cleaning (Provenance) Model - DCM
 
 Execute provenance harvester:
 ```
