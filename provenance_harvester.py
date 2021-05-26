@@ -901,6 +901,7 @@ if __name__ == "__main__":
                 #print(changes[3])
                 #print(changes)
                 is_change = False
+                columns = dataset[0]["cols"].copy()
 
                 cc = search_cell_column_byname(columns,changes[2]["commonColumnName"])
                 #print(cc)
@@ -1300,13 +1301,16 @@ if __name__ == "__main__":
 
                 # remove cells on row data 
                 # print(changes[2]["new_cells"])
+                """
+                # not used anymore since we used DCM
                 for c_key in changes[2]["new_cells"].keys():
                     #dataset[2]["rows"][c_key]["cells"]
                     for ind in sorted(index_col)[::-1]:
                         ##cell_changes.write("{},{},{},{},{},{},{},{},{}\n".format(order,change_id,changes[1],c_key,ind,None,dataset[2]["rows"][c_key]["cells"][ind],c_key,ori_column[1]["cellIndex"]))
                         #cell_writer.writerow([order,change_id,changes[1],c_key,ind,None,dataset[2]["rows"][c_key]["cells"][ind],c_key,ori_column[1]["cellIndex"]])
                         dataset[2]["rows"][c_key]["cells"].pop(ind)
-                
+                """
+
                 #for ind in sorted(index_col)[::-1]:                
                 #    col_dep_writer.writerow([order,change_id,changes[1],ind,ori_column[1]["cellIndex"]])
 
