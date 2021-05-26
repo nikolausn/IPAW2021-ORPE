@@ -1,4 +1,4 @@
-# IPAW2021 - Data Cleaning (Provenance) Model - DCM
+# ORPE Data Cleaning (Provenance) Model - DCM
 
 Execute provenance harvester:
 ```
@@ -22,4 +22,9 @@ for example
 This will produce queries result from the DCM
 
 
-More data cleaning use case for practice on NYPL Menu dataset is available in the examples folder.
+More data cleaning use case for practice on NYPL Menu dataset is available in the ***examples*** folder.
+
+
+Data Cleaning Provenance Model Explorer Notebook (JCDL Poster / Demo) submission can be found on the JCDL branch:
+https://github.com/idaks/IPAW2021-ORPE/tree/dcmx-jcdl
+
