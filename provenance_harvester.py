@@ -248,7 +248,7 @@ def read_change(changefile):
                 break   
     elif command_name == "com.google.refine.model.changes.ColumnSplitChange" :
         line = next(changefile).replace("\n","")
-        print(line)
+        #print(line)
 
         new_columns = []
         new_cells = {}
@@ -447,6 +447,8 @@ def search_cell_column_byname(col_mds,name):
     for i,col in enumerate(col_mds):
         if col["originalName"] == name:
             return i,col
+        if col["name"] == name:
+            return i,col            
 
     return -1, None
 
@@ -901,6 +903,8 @@ if __name__ == "__main__":
                 #print(changes[3])
                 #print(changes)
                 is_change = False
+
+                #print(dataset[0]["cols"])
                 columns = dataset[0]["cols"].copy()
 
                 cc = search_cell_column_byname(columns,changes[2]["commonColumnName"])
@@ -916,7 +920,15 @@ if __name__ == "__main__":
                         continue
                     c = int(ch["cell"])
                     nv = json.loads(ch["new"])
-                    ov = json.loads(ch["old"])
+                    if ch["old"] == "":
+                        ov = {"v": None}
+                    else:
+                        try:
+                            ov = json.loads(ch["old"])
+                        except Exception as ex:
+                            print(ch["old"])
+                            raise ex
+
                     
                     #print(ch)
                     #print(ch)
@@ -987,6 +999,9 @@ if __name__ == "__main__":
                 #print(len(changes[3]))
                 if is_change:
                     description = recipes[change_id]["description"]
+                    # removed common function name
+                    description = description.replace(".replace","")
+                      
                     # find columns from description
                     #print(description)
                     col_names = sorted(col_names,key=lambda x:len(x))[::-1]
@@ -1032,6 +1047,7 @@ if __name__ == "__main__":
                 #dataset[0]["cols"].pop(new_cell_index)
                 
                 columns = dataset[0]["cols"].copy()
+                #print(columns)
                 col_names = [x["name"] for x in columns]
 
                 # add dependency column
@@ -1050,6 +1066,9 @@ if __name__ == "__main__":
                 respective_index = set()
                 for x in all_col:
                     cc = search_cell_column_byname(columns,x)
+                    # continue if column not found
+                    #if cc[0] == -1:
+                    #    continue
                     icol, col = search_cell_column(columns,cc[1]["cellIndex"])  
                     #respective_index.add(icol)
                     respective_index.add(cc[1]["cellIndex"])
@@ -1239,7 +1258,7 @@ if __name__ == "__main__":
                 #print(oldColumnIndex)
                 ccexs_all.insert(oldColumnIndex,new_pos)                
 
-                cursor.execute("INSERT INTO col_dependency VALUES (?,?,?)",(state_id,-2,oldColumnIndex))
+                cursor.execute("INSERT INTO col_dependency VALUES (?,?,?)",(state_id,-2,cellIndex))
 
                 #print(ccexs_all)
                 conn.commit()
@@ -1301,16 +1320,17 @@ if __name__ == "__main__":
 
                 # remove cells on row data 
                 # print(changes[2]["new_cells"])
-                """
-                # not used anymore since we used DCM
+                #print(ori_column,index_col)
                 for c_key in changes[2]["new_cells"].keys():
-                    #dataset[2]["rows"][c_key]["cells"]
+                    #print(dataset[2]["rows"][c_key]["cells"])
                     for ind in sorted(index_col)[::-1]:
                         ##cell_changes.write("{},{},{},{},{},{},{},{},{}\n".format(order,change_id,changes[1],c_key,ind,None,dataset[2]["rows"][c_key]["cells"][ind],c_key,ori_column[1]["cellIndex"]))
                         #cell_writer.writerow([order,change_id,changes[1],c_key,ind,None,dataset[2]["rows"][c_key]["cells"][ind],c_key,ori_column[1]["cellIndex"]])
-                        dataset[2]["rows"][c_key]["cells"].pop(ind)
-                """
-
+                        try:
+                            dataset[2]["rows"][c_key]["cells"].pop(ind)
+                        except:
+                            continue
+                
                 #for ind in sorted(index_col)[::-1]:                
                 #    col_dep_writer.writerow([order,change_id,changes[1],ind,ori_column[1]["cellIndex"]])
 
@@ -1378,9 +1398,14 @@ if __name__ == "__main__":
             
             # op-5
             elif changes[1] == "com.google.refine.model.changes.ColumnRenameChange":
-                #print(changes[2])
+                #print(changes[2])                
                 index_col = search_cell_column_byname(dataset[0]["cols"],changes[2]["oldColumnName"])[1]
-                #print(index_col)
+                if index_col == None:
+                    index_col = search_cell_column_byname(dataset[0]["cols"],changes[2]["newColumnName"])[1]
+                #print(index_col,changes[2],dataset[0]["cols"])
+                # continue if column is not found
+                #if index_col == None:
+                #    continue
                 index_col["name"] = changes[2]["oldColumnName"]
                 #print(changes[2])
                 #exit()
@@ -1425,8 +1450,15 @@ if __name__ == "__main__":
                     continue
                 #print(ch)
                 c = int(ch["cell"])
-                nv = json.loads(ch["new"])
-                ov = json.loads(ch["old"])
+                print(ch)
+                try:
+                    nv = json.loads(ch["new"])
+                except:
+                    nv = {"v":""}
+                try:
+                    ov = json.loads(ch["old"])
+                except:
+                    ov = {"v":""}
 
                 cursor.execute("INSERT INTO col_dependency VALUES (?,?,?)",(state_id,c,c))
 
@@ -1471,8 +1503,9 @@ if __name__ == "__main__":
             # op-7
             elif changes[1] == "com.google.refine.model.changes.ColumnMoveChange":
                 columns = dataset[0]["cols"]
-                cursor.execute("INSERT INTO col_dependency VALUES (?,?,?)",(state_id,int(changes[2]["newColumnIndex"]),int(changes[2]["newColumnIndex"])))
-                cursor.execute("INSERT INTO col_dependency VALUES (?,?,?)",(state_id,int(changes[2]["oldColumnIndex"]),int(changes[2]["oldColumnIndex"])))
+                #print(ccexs_all)
+                cursor.execute("INSERT INTO col_dependency VALUES (?,?,?)",(state_id,ccexs_all[int(changes[2]["newColumnIndex"])][1],ccexs_all[int(changes[2]["newColumnIndex"])][1]))
+                cursor.execute("INSERT INTO col_dependency VALUES (?,?,?)",(state_id,ccexs_all[int(changes[2]["oldColumnIndex"])][1],ccexs_all[int(changes[2]["oldColumnIndex"])][1]))
 
                 temp = columns[int(changes[2]["newColumnIndex"])]
                 columns[int(changes[2]["newColumnIndex"])] = columns[int(changes[2]["oldColumnIndex"])]
@@ -1622,6 +1655,9 @@ if __name__ == "__main__":
                 #exit()
                 for x in set_idx:
                     cursor.execute("INSERT INTO col_dependency VALUES (?,?,?)",(state_id,x,x))
+                #for x in range(len(columns)):
+                #    cursor.execute("INSERT INTO col_dependency VALUES (?,?,?)",(state_id,x,x))
+                
 
                 #print(set_idx)
                 #print(all_col)
@@ -1661,13 +1697,14 @@ if __name__ == "__main__":
                     #print(li)
                     temp_rid = rcexs[i]
                     if rcexs_cp[li] != rcexs[i]:
+                        #print(temp_rid)
                         rcexs_cp[li] = (temp_rid[0],row_pos_id)
                         #temp_rid = rcexs_all[li]
                         #cursor.execute("INSERT INTO row_position VALUES (?,?,?,?,?)",(row_pos_id,temp_rid[0],state_id,int(prev_vv),temp_rid[1]))
 
                         #rcexs[li] = rcexs[i]
                         #rcexs[i] = temp_rid
-                        row_pos_id+=1
+                        #row_pos_id+=1
                     prev_vv = temp_rid[0]
                 #print(row_pos_id)
                 #exit()
@@ -1676,7 +1713,43 @@ if __name__ == "__main__":
                 #print(row_dict_id[3])
 
                 #exit()
+
+                # old row_order
+                old_row_dict = {}
+                for i,x in enumerate(rcexs):
+                    if i == 0:
+                        prev = -1
+                    else:
+                        prev = rcexs[i-1][0]
+                    old_row_dict[x[0]] = (prev,i,x)
+
+                #if state_id==6:
+                #    print(old_row_dict[2])
+                #    exit()
+
+                new_row_dict = {}
+                for i,x in enumerate(rcexs_cp):
+                    if i == 0:
+                        prev = -1
+                    else:
+                        prev = rcexs_cp[i-1][0]
+                    new_row_dict[x[0]] = (prev,i,x)
+
+                #print(row_pos_id)
+                for i,x in enumerate(new_row_dict.items()):                    
+                    if x[1][0] != old_row_dict[x[0]][0]:
+                        #cursor.execute("INSERT INTO row_position VALUES (?,?,?,?,?)",(x[1][2][1],int(x[0]),state_id,int(x[1][0]),old_row_dict[x[0]][2][1]))
+                        #rcexs_cp[x[1][1]] = x[1][2]
+                        cursor.execute("INSERT INTO row_position VALUES (?,?,?,?,?)",(row_pos_id,int(x[0]),state_id,int(x[1][0]),old_row_dict[x[0]][2][1]))
+                        rcexs_cp[x[1][1]] = (x[1][2][0],row_pos_id)
+                        row_pos_id+=1
+                    else:                        
+                        rcexs_cp[x[1][1]] = old_row_dict[x[0]][2]
+                        #row_pos_id+=1                                
                 
+                #print(row_pos_id)
+                #exit()
+                """
                 for i,li in enumerate(changes[2]["row_order"]):
                     if i == 0:
                         prev_vv = -1
@@ -1684,9 +1757,16 @@ if __name__ == "__main__":
                     if rcexs_cp[i] != rcexs[i]:
                         #cursor.execute("INSERT INTO row_position VALUES (?,?,?,?,?)",(temp_rid[1],temp_rid[0],state_id,int(prev_vv),rcexs[i][1]))
                         cursor.execute("INSERT INTO row_position VALUES (?,?,?,?,?)",(temp_rid[1],temp_rid[0],state_id,int(prev_vv),row_dict_id[temp_rid[0]]))
+                        #print(temp_rid[1])
                     prev_vv = temp_rid[0]
-
+                """
+                
                 #print(rcexs[:100])
+
+                #print(len(rcexs),len(rcexs_cp))
+                #print(rcexs[:20])
+                #print(rcexs_cp[:20])
+                #exit()
 
                 rcexs = rcexs_cp
 
@@ -1731,7 +1811,9 @@ if __name__ == "__main__":
                 dataset[2]["rows"] = old_rows.tolist()
                 #break                
             elif changes[1] == "com.google.refine.model.changes.RowRemovalChange":  
-                temp_rows = list(range(row_id))
+                #temp_rows = list(range(row_id))
+                temp_rows = [x[0] for x in rcexs]
+                tt_rows = temp_rows.copy()
 
                 for i,idx in enumerate(changes[2]["row_idx_remove"]):
                     #print(idx)
@@ -1798,12 +1880,59 @@ if __name__ == "__main__":
                     row_id+=1
                     #exit()
                     
-                conn.commit()                
+                conn.commit()                            
                 
                 rcexs_cp = rcexs.copy()
-                #print(temp_rows)
-                #print(rcexs)
+
+
+                # old row_order
+                old_row_dd = {}
+                for i,x in enumerate(tt_rows):
+                    if i == 0:
+                        prev = -1
+                    else:
+                        prev = tt_rows[i-1]
+                    old_row_dd[x] = prev
+
+                new_row_dd = {}
+                for i,x in enumerate(temp_rows):
+                    if i == 0:
+                        prev = -1
+                    else:
+                        prev = temp_rows[i-1]
+                    new_row_dd[x] = (prev,i)
+                
+                #print(len(old_row_dd),len(new_row_dd))
+                #exit()
+
+                old_row_dict = {}
+                for i,x in enumerate(rcexs_cp):
+                    if i == 0:
+                        prev = -1
+                    else:
+                        prev = rcexs_cp[i-1][0]
+                    old_row_dict[x[0]] = x[1]
+
+                for i,x in enumerate(new_row_dd.items()):
+                    if x[0] not in old_row_dd.keys():
+                        #print(x)
+                        cursor.execute("INSERT INTO row_position VALUES (?,?,?,?,?)",(row_pos_id,int(x[0]),state_id,int(x[1][0]),-1))
+                        rcexs.insert(x[1][1],(int(x[0]),row_pos_id))
+                        row_pos_id+=1
+                    else:
+                        if x[1][0] != old_row_dd[x[0]]:
+                            cursor.execute("INSERT INTO row_position VALUES (?,?,?,?,?)",(row_pos_id,int(x[0]),state_id,int(x[1][0]),old_row_dict[x[0]]))
+                            rcexs[x[1][1]] = (int(x[0]),row_pos_id)
+                            row_pos_id+=1
+                
+                rcexs = rcexs[:len(temp_rows)]
+
                 #print(row_pos_id)
+                #print(rcexs_cp[:20])
+                #print(rcexs[:20])
+                #exit()
+
+                '''
                 for v,vv in enumerate(temp_rows):
                     if v==0:
                         prev_vv = -1
@@ -1818,9 +1947,12 @@ if __name__ == "__main__":
                             #row_pos_id+=1
                             #print("executed1")
                     except:
+                        print(row_pos_id)
                         rcexs.insert(v,(vv,row_pos_id))
                         row_pos_id+=1
                         #print("executed2")
+                
+                #print(len(temp_rows),len(tt_rows))
 
                 #print(row_pos_id)
                 #exit()
@@ -1869,9 +2001,9 @@ if __name__ == "__main__":
                         cursor.execute("INSERT INTO row_position VALUES (?,?,?,?,?)",(rcexs[key][1],key,state_id,val,row_dict_id[key]))
                 
                 #print(new_row_dict[2],old_row_dict[2])
-                #print(rcexs_cp[:20])
-                #print(rcexs[:20])
-                #exit()
+                print(rcexs_cp[:20])
+                print(rcexs[:20])
+                exit()
 
                 #{[for i,x in enumerate(rcexs_cp)]}
                 
@@ -1904,6 +2036,7 @@ if __name__ == "__main__":
                     prev_vv = temp_rid[0]
                 """
                 #exit()
+                '''
                     
                 conn.commit()
                 #print(rcexs[:100])
